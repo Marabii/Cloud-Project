@@ -18,13 +18,24 @@ public class S3Config {
     @Value("${aws_secret_access_key}")
     private String secretAccessKey;
 
+    // If you’re storing the region in application.properties, inject it:
+    // e.g., aws.region=us-east-1
+    @Value("${aws.region:us-east-1}")  // default to us-east-1 if not specified
+    private String region;
+
     @Bean
     public S3Client s3Client() {
-        System.out.println("accessKeyId: " + accessKeyId);
-        System.out.println("secretAccessKey: " + secretAccessKey);
+        // 1. Validate that you actually have non-empty credentials:
+        if (accessKeyId == null || accessKeyId.isBlank() ||
+            secretAccessKey == null || secretAccessKey.isBlank()) {
+            throw new IllegalArgumentException("AWS credentials not provided or are empty. Check your properties.");
+        }
+
         AwsBasicCredentials awsCreds = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
+
+        // 2. Build S3Client using the correct region:
         return S3Client.builder()
-                .region(Region.US_EAST_1)
+                .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
                 .build();
     }
