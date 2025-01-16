@@ -1,0 +1,5 @@
+
+.codegpt
+
+#Ignore pem key
+uploadservicekey.pem
