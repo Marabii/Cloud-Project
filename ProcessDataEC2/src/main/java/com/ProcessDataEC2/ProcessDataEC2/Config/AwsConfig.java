@@ -1,5 +1,7 @@
 package com.ProcessDataEC2.ProcessDataEC2.Config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,8 +15,10 @@ import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 @Configuration
 public class AwsConfig {
 
-    @Value("${spring.cloud.aws.region.static}")
-    private String region;
+    private static final Logger logger = LoggerFactory.getLogger(AwsConfig.class);
+
+    @Value("${aws.region:us-east-1}")
+    private String awsRegion;
 
     @Value("${spring.cloud.aws.credentials.access-key}")
     private String accessKeyId;
@@ -24,34 +28,23 @@ public class AwsConfig {
 
     @Bean
     public S3Client s3Client() {
-        // 1. Validate that you actually have non-empty credentials:
-        if (accessKeyId == null || accessKeyId.isBlank() ||
-            secretAccessKey == null || secretAccessKey.isBlank()) {
-            throw new IllegalArgumentException("AWS credentials not provided or are empty. Check your properties.");
-        }
-
-        AwsBasicCredentials awsCreds = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
-
+        logger.info("Creating S3Client for region {}", awsRegion);
         return S3Client.builder()
-                .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-                .build(); // Uses default credentials provider chain (includes instance profile)
+            .credentialsProvider(StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(accessKeyId, secretAccessKey)
+            ))
+            .region(Region.of(awsRegion))
+            .build();
     }
 
     @Bean
     public SqsAsyncClient sqsAsyncClient() {
-        // 1. Validate that you actually have non-empty credentials:
-        if (accessKeyId == null || accessKeyId.isBlank() ||
-            secretAccessKey == null || secretAccessKey.isBlank()) {
-            throw new IllegalArgumentException("AWS credentials not provided or are empty. Check your properties.");
-        }
-
-        AwsBasicCredentials awsCreds = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
-
+        logger.info("Creating SqsAsyncClient for region {}", awsRegion);
         return SqsAsyncClient.builder()
-                .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-                .build();
+            .credentialsProvider(StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(accessKeyId, secretAccessKey)
+            ))
+            .region(Region.of(awsRegion))
+            .build();
     }
-
 }

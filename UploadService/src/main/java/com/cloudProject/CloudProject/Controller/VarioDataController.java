@@ -28,11 +28,11 @@ public class VarioDataController {
         return ResponseEntity.ok("hi there!");
     }
 
-    @GetMapping("/fetch-and-upload")
-    public ResponseEntity<String> fetchAndUpload() {
-        varioDataService.fetchAndUploadCsvFiles();
-        return ResponseEntity.ok("finished !");
-    }
+    // @GetMapping("/fetch-and-upload")
+    // public ResponseEntity<String> fetchAndUpload() {
+    //     varioDataService.fetchAndUploadCsvFiles();
+    //     return ResponseEntity.ok("finished !");
+    // }
 
     @PostMapping("/upload")
     public ResponseEntity<?> uploadCsv(@RequestParam("file") MultipartFile file) {

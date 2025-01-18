@@ -1,18 +1,14 @@
 package com.ProcessDataEC2.ProcessDataEC2.Service;
 
 import io.awspring.cloud.sqs.annotation.SqsListener;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVParser;
-import org.apache.commons.csv.CSVPrinter;
-import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.csv.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 
@@ -25,6 +21,8 @@ import java.util.Map;
 
 @Service
 public class ExportService {
+
+    private static final Logger logger = LoggerFactory.getLogger(ExportService.class);
 
     @Value("${app.s3.bucketName}")
     private String bucketName;
@@ -40,13 +38,18 @@ public class ExportService {
         this.sqsAsyncClient = sqsAsyncClient;
     }
 
-    @SqsListener(value = "${app.sqs.consolidateToExportQueue}")
+    /**
+     * This method listens on the Consolidate -> Export queue.
+     * message format: srcIp,dstIp,avgFlowDuration,stdDevFlowDuration,avgTotFwdPkts,stdDevTotFwdPkts,trafficNumber
+     */
+    @SqsListener("https://sqs.us-east-1.amazonaws.com/816069142521/SQS_ConsolidateToExport")
     public void handleExport(String messageBody) {
-        // message format: srcIp,dstIp,avgFlowDuration,stdDevFlowDuration,avgTotFwdPkts,stdDevTotFwdPkts,trafficNumber
+        logger.info("Received Export message: {}", messageBody);
+
         try {
             String[] parts = messageBody.split(",");
             if (parts.length != 7) {
-                System.out.println("Invalid message format: " + messageBody);
+                logger.warn("Invalid message format for Export: {}", messageBody);
                 return;
             }
 
@@ -59,25 +62,27 @@ public class ExportService {
             int trafficNumber = Integer.parseInt(parts[6]);
 
             // 1. Fetch existing finalData
+            logger.debug("Loading existing finalData.csv from S3 (bucket={}, key={})", bucketName, finalDataKey);
             Map<String, FinalData> finalDataMap = fetchFinalData();
 
             // 2. Update or add the new record
             String keyPair = srcIp + "," + dstIp;
             FinalData data = new FinalData(
-                    avgFlowDuration, 
+                    avgFlowDuration,
                     stdDevFlowDuration,
                     avgTotFwdPkts,
                     stdDevTotFwdPkts,
                     trafficNumber
             );
+            logger.debug("Updating keyPair={} with: {}", keyPair, data);
             finalDataMap.put(keyPair, data);
 
             // 3. Write finalData back to S3
             writeFinalData(finalDataMap);
-            System.out.println("Updated finalData.csv in S3 with: " + messageBody);
+            logger.info("Updated finalData.csv in S3 with message: {}", messageBody);
 
         } catch (Exception e) {
-            System.err.println("Error in ExportService: " + e.getMessage());
+            logger.error("Error in ExportService: {}", e.getMessage(), e);
         }
     }
 
@@ -88,6 +93,7 @@ public class ExportService {
                     .bucket(bucketName)
                     .key(finalDataKey)
                     .build();
+
             ResponseInputStream<GetObjectResponse> resp = s3Client.getObject(getObjectRequest);
             BufferedReader reader = new BufferedReader(new InputStreamReader(resp));
 
@@ -113,17 +119,19 @@ public class ExportService {
                         trafficNumber
                 ));
             }
+            logger.info("Loaded {} records from existing finalData.csv", finalDataMap.size());
 
         } catch (NoSuchKeyException e) {
             // If finalData.csv doesn't exist, we start fresh
-            System.out.println("No existing finalData.csv found. Creating new one.");
+            logger.warn("No existing finalData.csv found, will create a new one.", e);
         } catch (Exception e) {
-            System.err.println("Error reading finalData.csv: " + e.getMessage());
+            logger.error("Error reading finalData.csv: {}", e.getMessage(), e);
         }
         return finalDataMap;
     }
 
     private void writeFinalData(Map<String, FinalData> finalDataMap) {
+        logger.debug("Writing finalData.csv with {} total entries.", finalDataMap.size());
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              PrintWriter writer = new PrintWriter(baos);
              CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT
@@ -153,9 +161,10 @@ public class ExportService {
                     .build();
 
             s3Client.putObject(putReq, RequestBody.fromBytes(baos.toByteArray()));
+            logger.info("Successfully uploaded finalData.csv to s3://{}/{}", bucketName, finalDataKey);
 
         } catch (Exception e) {
-            System.err.println("Error writing finalData.csv: " + e.getMessage());
+            logger.error("Error writing finalData.csv: {}", e.getMessage(), e);
         }
     }
 
@@ -174,6 +183,12 @@ public class ExportService {
             this.avgTotFwdPkts = avgTotFwdPkts;
             this.stdDevTotFwdPkts = stdDevTotFwdPkts;
             this.trafficNumber = trafficNumber;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("{avgFlow=%.2f, stdDevFlow=%.2f, avgFwdPkts=%.2f, stdDevPkts=%.2f, trafficNum=%d}",
+                    avgFlowDuration, stdDevFlowDuration, avgTotFwdPkts, stdDevTotFwdPkts, trafficNumber);
         }
     }
 }

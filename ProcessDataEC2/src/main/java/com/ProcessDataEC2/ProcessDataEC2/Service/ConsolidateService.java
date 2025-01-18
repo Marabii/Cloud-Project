@@ -3,15 +3,15 @@ package com.ProcessDataEC2.ProcessDataEC2.Service;
 import io.awspring.cloud.sqs.annotation.SqsListener;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.ResponseInputStream;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -25,6 +25,8 @@ import java.util.Map;
  */
 @Service
 public class ConsolidateService {
+
+    private static final Logger logger = LoggerFactory.getLogger(ConsolidateService.class);
 
     @Value("${app.s3.bucketName}")
     private String bucketName;
@@ -43,14 +45,15 @@ public class ConsolidateService {
         this.sqsAsyncClient = sqsAsyncClient;
     }
 
-    @SqsListener(value = "${app.sqs.summarizeToConsolidateQueue}")
+    @SqsListener("https://sqs.us-east-1.amazonaws.com/816069142521/SQS_SummarizeToConsolidate")
     public void handleConsolidation(String message) {
         // message format: SrcIP,DstIP,TotalFlowDuration,TotalFwdPkts
-        // e.g. "192.168.0.1,10.0.0.1,1200,45"
+        logger.info("Received Consolidation message: {}", message);
+
         try {
             String[] parts = message.split(",");
             if (parts.length != 4) {
-                System.out.println("Invalid message format: " + message);
+                logger.warn("Invalid message format for Consolidation: {}", message);
                 return;
             }
 
@@ -60,6 +63,7 @@ public class ConsolidateService {
             long totalFwdPkts = Long.parseLong(parts[3]);
 
             // 1. Fetch existing finalData from S3
+            logger.debug("Fetching existing finalData.csv from bucket={} key={}", bucketName, finalDataKey);
             Map<String, FinalData> finalDataMap = fetchFinalData();
 
             // 2. Compute new stats
@@ -74,6 +78,9 @@ public class ConsolidateService {
             double newStdDevTotFwdPkts = Math.abs(totalFwdPkts - newAvgTotFwdPkts);
             int newTrafficNumber = existing.trafficNumber + 1;
 
+            logger.debug("For keyPair={} => newAvgFlowDuration={}, newStdDevFlowDuration={}, newAvgTotFwdPkts={}, newStdDevTotFwdPkts={}, newTrafficNumber={}",
+                    keyPair, newAvgFlowDuration, newStdDevFlowDuration, newAvgTotFwdPkts, newStdDevTotFwdPkts, newTrafficNumber);
+
             // 3. Build output data
             String calculatedData = String.format("%s,%s,%.2f,%.2f,%.2f,%.2f,%d",
                     srcIp, dstIp,
@@ -85,17 +92,22 @@ public class ConsolidateService {
             );
 
             // 4. Send to Consolidate->Export queue
+            logger.debug("Sending calculated data to Export queue={} : {}", consolidateToExportQueueUrl, calculatedData);
             sqsAsyncClient.sendMessage(
                     SendMessageRequest.builder()
                             .queueUrl(consolidateToExportQueueUrl)
                             .messageBody(calculatedData)
                             .build()
-            );
-
-            System.out.println("Sent to Export queue: " + calculatedData);
+            ).whenComplete((resp, err) -> {
+                if (err != null) {
+                    logger.error("Failed to send message to Export queue: {}", err.getMessage(), err);
+                } else {
+                    logger.info("Successfully sent message to Export queue: {}", calculatedData);
+                }
+            });
 
         } catch (Exception e) {
-            System.err.println("Error consolidating message: " + e.getMessage());
+            logger.error("Error consolidating message: {}", e.getMessage(), e);
         }
     }
 
@@ -106,6 +118,7 @@ public class ConsolidateService {
                     .bucket(bucketName)
                     .key(finalDataKey)
                     .build();
+
             ResponseInputStream<GetObjectResponse> finalDataObj = s3Client.getObject(getObjectRequest);
             BufferedReader reader = new BufferedReader(new InputStreamReader(finalDataObj));
 
@@ -131,10 +144,12 @@ public class ConsolidateService {
                         trafficNumber
                 ));
             }
+            logger.info("Successfully loaded existing finalData.csv with {} records.", finalDataMap.size());
+
         } catch (NoSuchKeyException e) {
-            System.out.println("No finalData.csv found, returning empty map.");
+            logger.warn("No finalData.csv found in S3. Returning empty map.", e);
         } catch (Exception e) {
-            System.err.println("Error fetching finalData.csv: " + e.getMessage());
+            logger.error("Error fetching finalData.csv: {}", e.getMessage(), e);
         }
         return finalDataMap;
     }
@@ -146,7 +161,7 @@ public class ConsolidateService {
         double stdDevTotFwdPkts = 0.0;
         int trafficNumber = 0;
 
-        public FinalData() { }
+        public FinalData() {}
 
         public FinalData(double avgFlowDuration, double stdDevFlowDuration, double avgTotFwdPkts,
                          double stdDevTotFwdPkts, int trafficNumber) {
