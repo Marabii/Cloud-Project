@@ -1,0 +1,3 @@
+com/example/cloudworkers/Main.class
+com/example/cloudworkers/lambda/ConsolidatorWorkerLambda$FinalData.class
+com/example/cloudworkers/lambda/ConsolidatorWorkerLambda.class
