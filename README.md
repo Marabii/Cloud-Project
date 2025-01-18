@@ -224,3 +224,9 @@ To run the **Export Client** as a Java application on **EC2**:
 3. The **Consolidator Worker** will consolidate the statistics and send the updated data to another SQS queue.
 4. The **Export Client** will take the final data from SQS and export it to `finalData.csv` in the `processed-data` folder in S3.
 
+---
+
+## **Note**
+
+We had problems implementing our solution on aws academy due to restrictive permissions, we thus created our own aws account and managed to make it work there. For any more details please contact us at minehamza97@gmail.com
+
