@@ -1,7 +1,3 @@
-Here is the updated **README** file with your clarification:
-
----
-
 # **README - IoT Traffic Data Processing using AWS**
 
 ## **Overview**
@@ -228,18 +224,3 @@ To run the **Export Client** as a Java application on **EC2**:
 3. The **Consolidator Worker** will consolidate the statistics and send the updated data to another SQS queue.
 4. The **Export Client** will take the final data from SQS and export it to `finalData.csv` in the `processed-data` folder in S3.
 
----
-
-## **8. Troubleshooting**
-
-- **Lambda Timeout**: If a Lambda function times out, increase the function timeout limit in the AWS console.
-- **File Upload Issues**: Ensure the Upload Client has the correct AWS credentials and access to the S3 bucket.
-- **SQS Delays**: Check the SQS settings and ensure the messages are being processed in the correct order.
-
----
-
-## **9. Conclusion**
-
-This README file provides detailed instructions for setting up and running the IoT Traffic Data Processing system using AWS services. By following the steps above, you can successfully upload, process, and export IoT data using a serverless architecture.
-
----
