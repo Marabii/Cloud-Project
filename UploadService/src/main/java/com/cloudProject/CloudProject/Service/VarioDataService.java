@@ -39,7 +39,7 @@ public class VarioDataService {
     private String datasetApiUrl;
 
     // Schedule the method to run every minute
-    @Scheduled(fixedRate = 60000) // 60000 milliseconds = 1 minute
+    @Scheduled(fixedRate = 84400000) // 60000 milliseconds = 1 minute
     public void fetchAndUploadCsvFiles() {
         log.info("Starting fetchAndUploadCsvFiles task.");
 
@@ -48,7 +48,7 @@ public class VarioDataService {
                 .exchangeStrategies(ExchangeStrategies.builder()
                         .codecs(configurer -> configurer
                                 .defaultCodecs()
-                                .maxInMemorySize(10 * 1024 * 1024) // Set limit to 10MB
+                                .maxInMemorySize(30 * 1024 * 1024) // Set limit to 10MB
                         )
                         .build())
                 .build();
