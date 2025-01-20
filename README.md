@@ -66,16 +66,24 @@ Add the AWS SDK dependencies to your `pom.xml` file for interaction with AWS ser
 ## **Project Structure**
 
 ```bash
-|-- src
-|   |-- main
-|       |-- java
-|           |-- com
-|               |-- iotdata
-|                   |-- UploadClient.java
-|                   |-- SummarizeWorker.java
-|                   |-- ConsolidatorWorker.java
-|                   |-- ExportClient.java
-|-- pom.xml (Maven build configuration)
+├── LambdaFunction
+│   ├── consolidator-worker
+│   ├── export-client
+│   ├── summarize-worker
+│   └── pom.xml
+├── ProcessDataEC2
+│   ├── src/main/java/com/ProcessDataEC2
+│   │                     └── Service
+│   │                       ├── ConsolidateService.java
+│   │                       ├── ExportService.java
+│   │                       └── SummarizeService.java
+│   ├── pom.xml
+│   ├── ...
+├── UploadService
+│   ├── ...
+├── README.md
+├── DemoVideo.md
+└── Project_document.md
 ```
 
 ---
@@ -204,14 +212,9 @@ To run the **Export Client** as a Java application on **EC2**:
   - `unprocessed-data`: For incoming IoT traffic CSV files.
   - `processed-data`: For the final consolidated data (`finalData.csv`).
 
-### **SNS Topics**
-- Set up SNS topics for communication between the workers:
-  - One SNS topic to notify the **Summarize Worker** about new uploads.
-  - One SNS topic for notifying the **Consolidator Worker** about the summarized data.
-
 ### **SQS Queues**
 - Create SQS queues to hold messages between the workers:
-   - `S3EventNotificationQueue` : SQS queue for transferring data from **S3** to **Summarize Worker**.
+  - `S3EventNotificationQueue` : SQS queue for transferring data from **S3** to **Summarize Worker**.
   - `SQS_SummarizeToConsolidate` : SQS queue for transferring data from **Summarize Worker** to **Consolidator Worker**.
   - `SQS_ConsolidateToExport` : One SQS queue for transferring data from **Consolidator Worker** to **Export Client**.
 
